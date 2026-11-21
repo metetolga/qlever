@@ -785,6 +785,28 @@ class Operation : public std::enable_shared_from_this<Operation> {
   // of the result).
   virtual bool columnOriginatesFromGraphOrUndef(const Variable& variable) const;
 
+  // Return true if all values that `variable` will be bound to by this
+  // operation are guaranteed to be defined and to be graphs over which the
+  // enclosing `GRAPH ?var {...}` clause ranges. This is e.g. true for the graph
+  // column of an `IndexScan` inside such a clause, but not for the subject or
+  // object column of an `IndexScan`, for `VALUES` clauses or for expression
+  // results. The query planner uses this information to skip the join of the
+  // graph variable with all the graphs of the dataset in a `GRAPH ?var {...}`
+  // clause whose inner pattern already binds `?var` (see
+  // `QueryPlanner::GraphPatternPlanner::bindGraphVariableIfUnbound`).
+  //
+  // Returning `false` never leads to a wrong result, but might be inefficient.
+  // The default implementation returns `true` iff the column is never
+  // undefined, at least one of the children contains `variable`, and this
+  // function returns `true` for all the children that contain `variable`. This
+  // is correct for all operations that pass on the values of their children or
+  // intersect them, and it should be overridden by operations that create new
+  // values for a variable of a child (e.g. the empty path of a
+  // `TransitivePath`), or (for efficiency reasons) by operations that only
+  // pass on the values of some of their children (e.g. `MINUS` or the join
+  // column of a `JOIN`).
+  virtual bool columnContainsOnlyActiveGraphs(const Variable& variable) const;
+
   // The context of the `LocalVocabEntry`s that belong to this operation.
   const LocalVocabContext& getLocalVocabContext() const {
     return _executionContext->getLocalVocabContext();

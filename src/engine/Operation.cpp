@@ -1060,3 +1060,25 @@ bool Operation::columnOriginatesFromGraphOrUndef(
                variable);
   });
 }
+
+// _____________________________________________________________________________
+bool Operation::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  const auto& columns = getExternallyVisibleVariableColumns();
+  AD_CONTRACT_CHECK(columns.contains(variable));
+  // An undefined value is never a graph. This check also covers all the
+  // operations that introduce undefined values for a variable of one of their
+  // children, like `UNION` or `OPTIONAL`.
+  if (columns.at(variable).mightContainUndef_ !=
+      ColumnIndexAndTypeInfo::UndefStatus::AlwaysDefined) {
+    return false;
+  }
+  if (ql::ranges::none_of(getChildren(), [&variable](const auto* child) {
+        return child->getVariableColumnOrNullopt(variable).has_value();
+      })) {
+    return false;
+  }
+  return ql::ranges::all_of(getChildren(), [&variable](const auto* child) {
+    return !child->getVariableColumnOrNullopt(variable).has_value() ||
+           child->getRootOperation()->columnContainsOnlyActiveGraphs(variable);
+  });
+}
