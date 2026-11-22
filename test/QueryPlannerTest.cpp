@@ -3017,6 +3017,53 @@ TEST(QueryPlanner, graphSubqueryWithoutScan) {
 }
 
 // _____________________________________________________________________________
+TEST(QueryPlanner, graphVariableBoundInsideGraphClause) {
+  auto scan = h::IndexScanFromStrings;
+  auto varG = std::vector{Variable{"?g"}};
+  std::vector<ColumnIndex> graphCol{ADDITIONAL_COLUMN_GRAPH_ID};
+  auto joinWithAllGraphs = [](auto innerMatcher) {
+    return h::Join(h::Sort(h::DistinctGraphs()), innerMatcher);
+  };
+
+  // The graph column of an index scan only contains graphs, so there is no
+  // need to join it with all the graphs.
+  h::expect("SELECT * { GRAPH ?g { ?s <p> ?o } }",
+            scan("?s", "<p>", "?o", {}, NamedTag{}, varG, graphCol));
+  // This also holds if the graph column is joined with something else.
+  h::expect("SELECT * { GRAPH ?g { ?s <p> ?o . VALUES ?g { <g1> } } }",
+            h::Join(h::Sort(h::ValuesClause("VALUES (?g) { (<g1>) }")),
+                    h::Sort(scan("?s", "<p>", "?o", {}, NamedTag{}, varG,
+                                 graphCol))));
+
+  // If `?g` is bound by something else, the values might not be graphs, so
+  // they have to be joined with all the graphs.
+  h::expect("SELECT * { GRAPH ?g { VALUES ?g { UNDEF } } }",
+            joinWithAllGraphs(
+                h::Sort(h::ValuesClause("VALUES (?g) { (UNDEF) }"))));
+  h::expect("SELECT * { GRAPH ?g { VALUES ?g { <doesNotExist> } } }",
+            joinWithAllGraphs(
+                h::Sort(h::ValuesClause("VALUES (?g) { (<doesNotExist>) }"))));
+  h::expect("SELECT * { GRAPH ?g { BIND(<x> AS ?g) } }",
+            joinWithAllGraphs(::testing::A<const QueryExecutionTree&>()));
+  // One side of the `UNION` binds `?g` via a `VALUES` clause.
+  h::expect(
+      "SELECT * { GRAPH ?g { { ?s <p> ?o } UNION { VALUES ?g { <g1> } } } }",
+      joinWithAllGraphs(::testing::A<const QueryExecutionTree&>()));
+  // A whitelist of graphs is joined via a `VALUES` clause.
+  h::expect("SELECT * FROM NAMED <g1> { GRAPH ?g { VALUES ?g { <g2> } } }",
+            h::Join(h::Sort(h::ValuesClause("VALUES (?g) { (<g1>) }")),
+                    h::Sort(h::ValuesClause("VALUES (?g) { (<g2>) }"))));
+
+  // If the graph variable is used inside the triple, the index scan binds the
+  // graph to an internal variable, which is then filtered for equality. This
+  // still guarantees that `?g` is a graph.
+  h::expect("SELECT * { GRAPH ?g { ?g <p> ?o } }",
+            h::Filter("?g = ?_QLever_internal_variable_qp_0",
+                      scan("?g", "<p>", "?o", {}, NamedTag{},
+                           {Variable{internalVar(0)}}, graphCol)));
+}
+
+// _____________________________________________________________________________
 TEST(QueryPlanner, WarningsOnUnboundVariables) {
   using enum ::OrderBy::AscOrDesc;
   // Unbound variable in ORDER BY.

@@ -75,6 +75,8 @@ class Minus : public Operation {
  public:
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
   /**
    * @brief Joins a and b using the column defined int joinColumns, storing the

@@ -54,6 +54,8 @@ class Join : public Operation {
  public:
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
   qlm::string getCacheKeyImpl() const override;
   std::unique_ptr<Operation> cloneImpl() const override;
   Result computeResult(bool requestLaziness) override;

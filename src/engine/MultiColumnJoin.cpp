@@ -326,6 +326,19 @@ bool MultiColumnJoin::columnOriginatesFromGraphOrUndef(
 }
 
 // _____________________________________________________________________________
+bool MultiColumnJoin::columnContainsOnlyActiveGraphs(
+    const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // The join columns only contain values that are contained in both children.
+  if (_left->getVariableColumnOrNullopt(variable).has_value() &&
+      _right->getVariableColumnOrNullopt(variable).has_value()) {
+    using namespace qlever::joinHelpers;
+    return doesJoinProduceOnlyActiveGraphs(_left, _right, variable);
+  }
+  return Operation::columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 std::optional<std::shared_ptr<QueryExecutionTree>>
 MultiColumnJoin::makeTreeWithBindColumn(const parsedQuery::Bind& bind) const {
   return pushDownBindToAnyChild(bind, {{_left, _right}, allocator()});

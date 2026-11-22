@@ -71,6 +71,11 @@ bool Join::columnOriginatesFromGraphOrUndef(const Variable& variable) const {
 }
 
 // _____________________________________________________________________________
+bool Join::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  return impl_->columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 qlm::string Join::getCacheKeyImpl() const { return impl_->getCacheKeyImpl(); }
 
 // _____________________________________________________________________________

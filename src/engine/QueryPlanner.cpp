@@ -3214,12 +3214,24 @@ void QueryPlanner::GraphPatternPlanner::bindGraphVariableIfUnbound(
       qec_, graphVar, planner_.getActiveGraphs())};
   for (auto& innerCand : candidates) {
     if (!innerCand._qet->getVariableColumns().contains(graphVar)) {
+      // The inner pattern doesn't depend on the graph, so it holds for every
+      // graph, e.g. `GRAPH ?g { VALUES ?x { 1 } }`.
       innerCand = makeSubtreePlan<CartesianProductJoin>(
           planner_._qec, CartesianProductJoin::Children{
                              {graphsCand._qet, innerCand._qet}, allocator()});
+    } else if (!innerCand._qet->getRootOperation()
+                    ->columnContainsOnlyActiveGraphs(graphVar)) {
+      // The inner pattern binds `?var`, but possibly to values that are not
+      // graphs or to UNDEF, e.g. `GRAPH ?g { VALUES ?g { <x> UNDEF } }`, so we
+      // have to restrict `?var` to the graphs by joining. Otherwise, e.g. for
+      // `GRAPH ?g { ?s ?p ?o }`, the index scans already bind `?var` to exactly
+      // the graphs in which the pattern matches.
+      auto joinCandidates =
+          planner_.createJoinCandidates(graphsCand, innerCand, boost::none);
+      AD_CORRECTNESS_CHECK(!joinCandidates.empty());
+      innerCand = std::move(joinCandidates.at(
+          planner_.findCheapestExecutionTree(joinCandidates)));
     }
-    // TODO<metetolga> queries of the form SELECT * { GRAPH ?g { VALUES ?g
-    // { <doesnotexist> } } } are not correctly handled.
   }
 }
 

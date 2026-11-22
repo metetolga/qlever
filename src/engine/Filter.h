@@ -24,6 +24,12 @@ class Filter : public Operation {
  public:
   size_t getResultWidth() const override;
 
+  // In addition to the default implementation, a filter of the form
+  // `FILTER(?x = ?y)` guarantees `?x` if the child guarantees `?y` (and vice
+  // versa). The query planner uses such a filter for `GRAPH ?g { ?g ?p ?o }`,
+  // where the index scan binds the graph to an internal variable.
+  bool columnContainsOnlyActiveGraphs(const Variable& variable) const override;
+
  public:
   Filter(QueryExecutionContext* qec,
          std::shared_ptr<QueryExecutionTree> subtree,

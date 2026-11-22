@@ -61,6 +61,8 @@ class MultiColumnJoin : public Operation {
  public:
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
   /**
    * @brief Joins left and right using the column defined int joinColumns,

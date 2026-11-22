@@ -737,6 +737,49 @@ bool TransitivePathBase::columnOriginatesFromGraphOrUndef(
 }
 
 // _____________________________________________________________________________
+bool TransitivePathBase::columnContainsOnlyActiveGraphs(
+    const Variable& variable) const {
+  const auto& columns = getExternallyVisibleVariableColumns();
+  AD_CONTRACT_CHECK(columns.contains(variable));
+  if (variable == graphVariable_) {
+    // The graph IDs of the result stem from the graph columns of the children
+    // (see `getActualGraphColumnIndex`). This also holds if the graph variable
+    // is one of the sides, e.g. in `GRAPH ?g { ?g <p>* ?x }`, because the
+    // implementation only keeps the start nodes that are equal to the graph,
+    // and sets the target to the graph (see `TransitivePathImpl`).
+    if (columns.at(variable).mightContainUndef_ !=
+        ColumnIndexAndTypeInfo::UndefStatus::AlwaysDefined) {
+      return false;
+    }
+    bool someChildHasGraphColumn = false;
+    for (const auto* child : getChildren()) {
+      for (const auto& graphColumnVariable :
+           {internalGraphHelper_, graphVariable_.value()}) {
+        if (child->getVariableColumnOrNullopt(graphColumnVariable)
+                .has_value()) {
+          someChildHasGraphColumn = true;
+          if (!child->getRootOperation()->columnContainsOnlyActiveGraphs(
+                  graphColumnVariable)) {
+            return false;
+          }
+          // `internalGraphHelper_` takes precedence, see
+          // `getActualGraphColumnIndex`.
+          break;
+        }
+      }
+    }
+    return someChildHasGraphColumn;
+  }
+  // Otherwise the two sides are bound to nodes, which are not necessarily
+  // graphs. The payload columns are copied over from the children, which is
+  // handled by the default implementation.
+  if (variable == lhs_.value_ || variable == rhs_.value_) {
+    return false;
+  }
+  return Operation::columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 void TransitivePathBase::setTreeAndChildrenToClone(
     TransitivePathBase& copy) const {
   copy.subtree_ = subtree_->clone();

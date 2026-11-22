@@ -272,6 +272,23 @@ bool EmptyPath::columnOriginatesFromGraphOrUndef(
 }
 
 // _____________________________________________________________________________
+bool EmptyPath::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // The values of this column are the subjects and objects of the knowledge
+  // graph, which are not necessarily graphs.
+  if (variable == variable_) {
+    return false;
+  }
+  // The graph column is always defined, and its values are either read from
+  // the index or checked against it (UNDEF values are expanded to the graphs
+  // they occur in), restricted to the `activeGraphs_`.
+  if (variable == graphVariable_) {
+    return true;
+  }
+  return Operation::columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 std::unique_ptr<Operation> EmptyPath::cloneImpl() const {
   std::optional<CheckedChild> checkedChild = std::nullopt;
   if (checkedChild_.has_value()) {

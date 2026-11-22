@@ -227,6 +227,20 @@ inline bool doesJoinProduceGuaranteedGraphValuesOrUndef(
          (rightInGraph && !rightUndef);
 }
 
+// Helper function to check if the join of two columns propagates the value
+// returned by `Operation::columnContainsOnlyActiveGraphs`. Such a column is
+// never undefined, so the join only keeps values that are contained in it, no
+// matter which values the other side contains.
+inline bool doesJoinProduceOnlyActiveGraphs(
+    const std::shared_ptr<QueryExecutionTree>& left,
+    const std::shared_ptr<QueryExecutionTree>& right,
+    const Variable& variable) {
+  auto onlyActiveGraphs = [&variable](const auto& tree) {
+    return tree->getRootOperation()->columnContainsOnlyActiveGraphs(variable);
+  };
+  return onlyActiveGraphs(left) || onlyActiveGraphs(right);
+}
+
 // Helper function to check if any of the join columns could potentially contain
 // undef values.
 inline bool joinColumnsAreAlwaysDefined(

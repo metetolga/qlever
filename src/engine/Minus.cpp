@@ -332,6 +332,12 @@ bool Minus::columnOriginatesFromGraphOrUndef(const Variable& variable) const {
 }
 
 // _____________________________________________________________________________
+bool Minus::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  // The values of the right side never become part of the result.
+  return _left->getRootOperation()->columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 Result Minus::lazyMinusJoin(std::shared_ptr<const Result> left,
                             std::shared_ptr<const Result> right,
                             bool requestLaziness) {

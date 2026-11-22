@@ -380,6 +380,8 @@ class TransitivePathBase : public Operation {
 
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
   // Return a set of subtrees that can be used alternatively when the left or
   // right side is bound. This is used by the `TransitivePathBinSearch` class,

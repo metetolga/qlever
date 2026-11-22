@@ -302,6 +302,8 @@ class IndexScan final : public Operation {
 
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
   // Retrieve the `Permutation` entity for this `IndexScan`.
   const Permutation& permutation() const;

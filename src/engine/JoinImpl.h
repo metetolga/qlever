@@ -84,6 +84,8 @@ class JoinImpl : public Operation {
  public:
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
   /**
    * @brief Joins IdTables a and b on join column jc2, returning

@@ -390,6 +390,22 @@ bool OptionalJoin::columnOriginatesFromGraphOrUndef(
   return Operation::columnOriginatesFromGraphOrUndef(variable);
 }
 
+// _____________________________________________________________________________
+bool OptionalJoin::columnContainsOnlyActiveGraphs(
+    const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // Every row of the result stems from a row of the left side. If the left
+  // side only contains active graphs, they are never undefined, so the join
+  // column keeps the values of the left side.
+  if (_left->getVariableColumnOrNullopt(variable).has_value() &&
+      _right->getVariableColumnOrNullopt(variable).has_value()) {
+    return _left->getRootOperation()->columnContainsOnlyActiveGraphs(variable);
+  }
+  // The columns that only occur on the right side might be undefined, which is
+  // detected by the default implementation.
+  return Operation::columnContainsOnlyActiveGraphs(variable);
+}
+
 // ______________________________________________________________
 void OptionalJoin::optionalJoin(
     const IdTableView<0>& left, const IdTableView<0>& right,

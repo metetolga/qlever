@@ -47,6 +47,11 @@ class Bind : public Operation {
   std::unique_ptr<Operation> cloneWithNewChildren(
       qlm::vector<std::shared_ptr<QueryExecutionTree>> children) const override;
 
+  // A `BIND` that only renames a variable, e.g. `BIND(?x AS ?y)`, keeps the
+  // guarantee of the renamed variable. The query planner uses such a `BIND`
+  // for the graph variable of a subquery inside a `GRAPH ?var {...}` clause.
+  bool columnContainsOnlyActiveGraphs(const Variable& variable) const override;
+
  private:
   [[nodiscard]] bool isDeterministicImpl() const override;
   std::unique_ptr<Operation> cloneImpl() const override;

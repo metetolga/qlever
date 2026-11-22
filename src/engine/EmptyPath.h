@@ -127,6 +127,8 @@ class EmptyPath : public Operation {
   bool knownEmptyResult() override;
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
  protected:
   qlm::vector<ColumnIndex> resultSortedOn() const override;

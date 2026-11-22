@@ -399,6 +399,17 @@ bool ExistsJoin::columnOriginatesFromGraphOrUndef(
   return left_->getRootOperation()->columnOriginatesFromGraphOrUndef(variable);
 }
 
+// _____________________________________________________________________________
+bool ExistsJoin::columnContainsOnlyActiveGraphs(
+    const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // The `existsVariable_` is bound to a boolean, which is never a graph.
+  if (variable == existsVariable_) {
+    return false;
+  }
+  return left_->getRootOperation()->columnContainsOnlyActiveGraphs(variable);
+}
+
 namespace {
 
 // Implementation to add the `EXISTS` column to the result of a child operation

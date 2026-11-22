@@ -1184,6 +1184,25 @@ bool IndexScan::columnOriginatesFromGraphOrUndef(
 }
 
 // _____________________________________________________________________________
+bool IndexScan::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // Only the graph column contains graphs. Its values are always defined and
+  // restricted to `graphsToFilter_`, which inside a `GRAPH ?var {...}` clause
+  // are exactly the graphs that `?var` ranges over. The subject and object
+  // columns on the other hand might contain values that are not graphs.
+  if (permutation().permutationType() != Permutation::Type::NORMAL) {
+    return false;
+  }
+  for (size_t i = 0; i < additionalColumns_.size(); ++i) {
+    if (additionalColumns_.at(i) == ADDITIONAL_COLUMN_GRAPH_ID &&
+        additionalVariables_.at(i) == variable) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// _____________________________________________________________________________
 std::optional<std::shared_ptr<QueryExecutionTree>>
 IndexScan::makeTreeWithStrippedColumns(
     const std::set<Variable>& variables) const {

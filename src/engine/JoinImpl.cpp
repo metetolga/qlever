@@ -827,6 +827,16 @@ bool JoinImpl::columnOriginatesFromGraphOrUndef(
 }
 
 // _____________________________________________________________________________
+bool JoinImpl::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  // The join column only contains values that are contained in both children.
+  if (variable == joinVar_) {
+    return doesJoinProduceOnlyActiveGraphs(left_, right_, variable);
+  }
+  return Operation::columnContainsOnlyActiveGraphs(variable);
+}
+
+// _____________________________________________________________________________
 std::optional<std::shared_ptr<QueryExecutionTree>>
 JoinImpl::makeTreeWithStrippedColumns(
     const std::set<Variable>& variables) const {

@@ -38,13 +38,13 @@
 //  SELECT ?g WHERE { GRAPH ?g { } } -> gives all distinct graphs in the dataset
 //  SELECT ?g WHERE { GRAPH ?g { VALUES ?x { <something> } } } -> cartesian
 //  product of all distinct graphs with all values of ?x
-//
-// TODO<metetolga> `SELECT ?g WHERE { GRAPH ?g { VALUES ?g { <something> } } }`
-// is not covered yet.
+//  SELECT ?g WHERE { GRAPH ?g { VALUES ?g { <something> } } } -> join of all
+//  distinct graphs with the values of ?g
 //
 // The query planner injects a `DistinctGraphs` operation whenever it detects
-// a `GRAPH ?g { <inner> }` pattern where `?g` is not already bound by
-// `<inner>`.
+// a `GRAPH ?g { <inner> }` pattern where `<inner>` doesn't bind `?g` or might
+// bind it to values that are not graphs (see
+// `Operation::columnContainsOnlyActiveGraphs`).
 class DistinctGraphs : public Operation {
  public:
   DistinctGraphs(QueryExecutionContext* qec, Variable graphVariable,
@@ -76,6 +76,13 @@ class DistinctGraphs : public Operation {
   float getMultiplicity(size_t) override { return 1.0f; }
 
   bool knownEmptyResult() override { return false; }
+
+  // The result consists of exactly the graphs of the index.
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override {
+    AD_CONTRACT_CHECK(variable == graphVariable_);
+    return true;
+  }
 
   // Each graph ID appears once, so the result is distinct iff column 0 is kept.
   bool isDistinctByImpl(

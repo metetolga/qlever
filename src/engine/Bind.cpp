@@ -303,3 +303,17 @@ Bind::makeTreeWithStrippedColumns(
   return columnStrippingHelpers::makeTreeWithOptionalStripOperation<Bind>(
       getExecutionContext(), requestedVariables, std::move(subtree), _bind);
 }
+
+// _____________________________________________________________________________
+bool Bind::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  AD_CONTRACT_CHECK(getExternallyVisibleVariableColumns().contains(variable));
+  if (variable != _bind._target) {
+    return Operation::columnContainsOnlyActiveGraphs(variable);
+  }
+  auto renamedVariable = _bind._expression.getVariableOrNullopt();
+  return renamedVariable.has_value() &&
+         _subtree->getVariableColumnOrNullopt(renamedVariable.value())
+             .has_value() &&
+         _subtree->getRootOperation()->columnContainsOnlyActiveGraphs(
+             renamedVariable.value());
+}

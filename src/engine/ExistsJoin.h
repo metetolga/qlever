@@ -81,6 +81,8 @@ class ExistsJoin : public Operation {
  public:
   bool columnOriginatesFromGraphOrUndef(
       const Variable& variable) const override;
+  bool columnContainsOnlyActiveGraphs(
+      const Variable& variable) const override;
 
  private:
   [[nodiscard]] bool isDeterministicImpl() const override { return true; }

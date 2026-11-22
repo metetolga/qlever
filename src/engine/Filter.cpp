@@ -14,6 +14,7 @@
 #include "engine/ExistsJoin.h"
 #include "engine/QueryExecutionTree.h"
 #include "engine/sparqlExpressions/ExistsExpression.h"
+#include "engine/sparqlExpressions/RelationalExpressions.h"
 #include "engine/sparqlExpressions/SparqlExpression.h"
 #include "engine/sparqlExpressions/SparqlExpressionGenerators.h"
 #include "engine/sparqlExpressions/SparqlExpressionValueGetters.h"
@@ -313,4 +314,30 @@ Filter::makeTreeWithStrippedColumns(
   return columnStrippingHelpers::makeTreeWithOptionalStripOperation<Filter>(
       getExecutionContext(), requestedVariables, std::move(subtree),
       _expression);
+}
+
+// _____________________________________________________________________________
+bool Filter::columnContainsOnlyActiveGraphs(const Variable& variable) const {
+  if (Operation::columnContainsOnlyActiveGraphs(variable)) {
+    return true;
+  }
+  // `?x = ?y` is only true if both are bound to the same term (for two IRIs
+  // `=` means that they are identical), so if `?y` is a graph, then so is `?x`.
+  const auto* equal = dynamic_cast<const sparqlExpression::EqualExpression*>(
+      _expression.getPimpl());
+  if (equal == nullptr) {
+    return false;
+  }
+  auto children = equal->children();
+  AD_CORRECTNESS_CHECK(children.size() == 2);
+  auto left = children[0]->getVariableOrNullopt();
+  auto right = children[1]->getVariableOrNullopt();
+  auto isGuaranteedOther = [this, &variable](const std::optional<Variable>& a,
+                                             const std::optional<Variable>& b) {
+    return a == variable && b.has_value() &&
+           _subtree->getVariableColumnOrNullopt(b.value()).has_value() &&
+           _subtree->getRootOperation()->columnContainsOnlyActiveGraphs(
+               b.value());
+  };
+  return isGuaranteedOther(left, right) || isGuaranteedOther(right, left);
 }
