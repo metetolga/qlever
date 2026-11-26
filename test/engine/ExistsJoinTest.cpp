@@ -836,6 +836,47 @@ TEST(ExistsJoin, columnOriginatesFromGraphOrUndef) {
 }
 
 // _____________________________________________________________________________
+TEST(ExistsJoin, columnContainsOnlyActiveGraphs) {
+  using ad_utility::triple_component::Iri;
+  auto* qec = ad_utility::testing::getQec();
+  auto values1 = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?g"}});
+  auto values2 = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?c"}});
+  auto index = ad_utility::makeExecutionTree<IndexScan>(
+      qec, Permutation::POS,
+      SparqlTripleSimple{
+          Variable{"?a"},
+          Iri::fromIriref("<b>"),
+          Iri::fromIriref("<c>"),
+          {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}});
+
+  // Only the left side counts, and its graph column ?g only contains graphs.
+  // Also the exists variable is a boolean, never a graph.
+  ExistsJoin existsJoin1{qec, index, values1, Variable{"?z"}};
+  EXPECT_FALSE(existsJoin1.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+  EXPECT_TRUE(existsJoin1.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_FALSE(existsJoin1.columnContainsOnlyActiveGraphs(Variable{"?z"}));
+  EXPECT_THROW(
+      existsJoin1.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+      ad_utility::Exception);
+
+  // Only the left side counts, and it is a VALUES clause, so there is no
+  // guarantee.
+  ExistsJoin existsJoin2{qec, values1, index, Variable{"?z"}};
+  EXPECT_FALSE(existsJoin2.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+  EXPECT_FALSE(existsJoin2.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+
+  // The columns that only the right side has (here `?c`) are not part of the
+  // result, so asking about them violates the contract.
+  ExistsJoin existsJoin3{qec, index, values2, Variable{"?z"}};
+  EXPECT_THROW(existsJoin3.columnContainsOnlyActiveGraphs(Variable{"?c"}),
+               ad_utility::Exception);
+}
+
+// _____________________________________________________________________________
 TEST(ExistsJoin, addExistsJoinsToSubtreeDoesntCollideForHiddenVariables) {
   auto* qec = getQec();
 
