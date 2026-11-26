@@ -16,6 +16,7 @@
 #include "engine/MinusRowHandler.h"
 #include "engine/ValuesForTesting.h"
 #include "util/AllocatorTestHelpers.h"
+#include "util/Exception.h"
 #include "util/IdTableHelpers.h"
 #include "util/IndexTestHelpers.h"
 #include "util/LocalVocabEntryTestHelpers.h"
@@ -487,6 +488,37 @@ TEST(Minus, columnOriginatesFromGraphOrUndef) {
   EXPECT_FALSE(minus4.columnOriginatesFromGraphOrUndef(Variable{"?b"}));
   EXPECT_THROW(
       minus4.columnOriginatesFromGraphOrUndef(Variable{"?notExisting"}),
+      ad_utility::Exception);
+}
+
+// _____________________________________________________________________________
+TEST(Minus, columnContainsOnlyActiveGraphs) {
+  using ad_utility::triple_component::Iri;
+  auto* qec = ad_utility::testing::getQec();
+  auto values = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?g"}});
+  auto index = ad_utility::makeExecutionTree<IndexScan>(
+      qec, Permutation::POS,
+      SparqlTripleSimple{Variable{"?a"}, Iri::fromIriref("<b>"),
+                         Iri::fromIriref("<c>"), 
+      {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}
+    });
+
+  // Only the left side counts, and it is a VALUES clause, so there is no guarantee.
+  Minus minus1{qec, values, index};
+  EXPECT_FALSE(minus1.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+  EXPECT_FALSE(minus1.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_THROW(
+      minus1.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+      ad_utility::Exception);
+
+  // Only the left side counts, and its graph column ?g only contains graphs.
+  Minus minus2{qec, index, values};
+  EXPECT_FALSE(minus2.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+  EXPECT_TRUE(minus2.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_THROW(
+      minus2.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
       ad_utility::Exception);
 }
 
