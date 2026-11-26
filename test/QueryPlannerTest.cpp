@@ -3467,11 +3467,14 @@ TEST(QueryPlanner, UnconnectedMinusAndOptionalInGraphClause) {
   h::expect("SELECT * { GRAPH ?g { ?g <p> ?b OPTIONAL { ?g <q> ?y } } }",
             h::OptionalJoin(::testing::A<const QueryExecutionTree&>(),
                             ::testing::A<const QueryExecutionTree&>()));
-  // But only if the preceding pattern binds the graph variable.
+  // If the preceding pattern doesn't bind the graph variable, it is first
+  // combined with all graphs, so that the OPTIONAL is evaluated per graph.
   h::expect(
       "SELECT * { GRAPH ?g { VALUES ?v { 1 } OPTIONAL { ?x <q> ?y } } }",
-      h::CartesianProductJoin(h::ValuesClause("VALUES (?v) { (1) }"),
-                              h::NeutralOptional(scan("?x", "<q>", "?y"))));
+      h::OptionalJoin(
+          h::Sort(h::CartesianProductJoin(
+              h::DistinctGraphs(), h::ValuesClause("VALUES (?v) { (1) }"))),
+          h::Sort(scan("?x", "<q>", "?y"))));
 }
 
 // _____________________________________________________________________________

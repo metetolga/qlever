@@ -3072,9 +3072,9 @@ bool QueryPlanner::GraphPatternPlanner::handleUnconnectedMinusOrOptional(
     return false;
   }
   // Inside `GRAPH ?g {...}` the patterns are evaluated per graph, so an
-  // OPTIONAL has to be joined on `?g` if the previous patterns bind it. The
-  // triples only get their `?g` column when they are planned (contains-word and
-  // materialized views are not allowed inside a `GRAPH` clause).
+  // OPTIONAL has to be joined on `?g` if there are any previous patterns.
+  // If they don't bind `?g` yet, `visitGroupOptionalOrMinus` binds it before
+  // the join.
   //
   // For a MINUS on the other hand, `?g` only counts as a shared variable if it
   // is in scope on both sides without the implicit graph columns of the index
@@ -3084,7 +3084,9 @@ bool QueryPlanner::GraphPatternPlanner::handleUnconnectedMinusOrOptional(
   auto previousVariables = getVariablesOfPreviousPatterns();
   if (const auto& graphVariable = planner_.activeGraphVariable_;
       graphVariable.has_value()) {
-    if (type == OPTIONAL && !candidateTriples_._triples.empty()) {
+    bool hasPreviousPatterns =
+        !candidateTriples_._triples.empty() || !candidatePlans_.empty();
+    if (type == OPTIONAL && hasPreviousPatterns) {
       previousVariables.insert(graphVariable.value());
     } else if (type == MINUS && !isGraphVariableInScopeOnBothSidesOfMinus) {
       previousVariables.erase(graphVariable.value());
@@ -3126,6 +3128,17 @@ void QueryPlanner::GraphPatternPlanner::visitGroupOptionalOrMinus(
     bool isGraphVariableInScopeOnBothSidesOfMinus) {
   // Empty group graph patterns should have been handled previously.
   AD_CORRECTNESS_CHECK(!candidates.empty());
+
+  // GRAPH ?g { OPTIONAL {...} } with nothing before it: per graph, the left
+  // side is one empty row, so in total it is one row per graph.
+  if (const auto& graphVar = planner_.activeGraphVariable_;
+      graphVar.has_value() && candidates[0].type == SubtreePlan::OPTIONAL &&
+      candidatePlans_.empty() && candidateTriples_._triples.empty() &&
+      candidates[0]._qet->getVariableColumns().contains(graphVar.value())) {
+    candidatePlans_.push_back(
+        singlePlanVec(SubtreePlan{DistinctGraphs::makeAllGraphs(
+            qec_, graphVar.value(), planner_.getActiveGraphs())}));
+  }
 
   // Optionals that occur before any of their variables have been bound,
   // actually behave like ordinary (Group)GraphPatterns.
@@ -3169,6 +3182,16 @@ void QueryPlanner::GraphPatternPlanner::visitGroupOptionalOrMinus(
   // an optional or minus join.
   optimizeCommutatively();
   AD_CORRECTNESS_CHECK(candidatePlans_.size() == 1);
+
+  // Inside `GRAPH ?g {...}`, an OPTIONAL or MINUS that binds `?g` has to be
+  // evaluated per graph, so the previous patterns must bind `?g` as well.
+  if (const auto& graphVariable = planner_.activeGraphVariable_;
+      graphVariable.has_value() &&
+      candidates[0]._qet->getVariableColumns().contains(
+          graphVariable.value())) {
+    bindGraphVariableIfUnbound(graphVariable.value(), candidatePlans_.at(0));
+  }
+
   SubtreePlanVec nextCandidates{allocator()};
   // For each candidate plan, and each plan from the OPTIONAL or MINUS, create
   // a new plan with an optional join. Note that `createJoinCandidates` will
@@ -3216,9 +3239,14 @@ void QueryPlanner::GraphPatternPlanner::bindGraphVariableIfUnbound(
     if (!innerCand._qet->getVariableColumns().contains(graphVar)) {
       // The inner pattern doesn't depend on the graph, so it holds for every
       // graph, e.g. `GRAPH ?g { VALUES ?x { 1 } }`.
-      innerCand = makeSubtreePlan<CartesianProductJoin>(
+      auto newCand = makeSubtreePlan<CartesianProductJoin>(
           planner_._qec, CartesianProductJoin::Children{
                              {graphsCand._qet, innerCand._qet}, allocator()});
+      // Keep the filters, binds etc. that are already part of `innerCand`,
+      // because this function is also called in the middle of a group (before
+      // an OPTIONAL or MINUS), where they must not be applied again.
+      assignNodesFilterAndTextLimitIds(newCand, innerCand);
+      innerCand = std::move(newCand);
     } else if (!innerCand._qet->getRootOperation()
                     ->columnContainsOnlyActiveGraphs(graphVar)) {
       // The inner pattern binds `?var`, but possibly to values that are not
@@ -3623,6 +3651,24 @@ void QueryPlanner::GraphPatternPlanner::visitUnion(parsedQuery::Union& arg) {
   // are presorted.
   SubtreePlan left = optimizeSingle(&arg._child1);
   SubtreePlan right = optimizeSingle(&arg._child2);
+
+  // Inside `GRAPH ?g {...}`, if only one side binds `?g`, the other side has to
+  // bind it too. Otherwise its rows would have `?g` unbound in the union.
+  if (const auto& graphVariable = planner_.activeGraphVariable_;
+      graphVariable.has_value()) {
+    auto bindsGraphVariable = [&graphVariable](const SubtreePlan& plan) {
+      return plan._qet->getVariableColumns().contains(graphVariable.value());
+    };
+    if (bindsGraphVariable(left) != bindsGraphVariable(right)) {
+      auto bindIfUnbound = [this, &graphVariable](SubtreePlan& plan) {
+        auto plans = singlePlanVec(std::move(plan));
+        bindGraphVariableIfUnbound(graphVariable.value(), plans);
+        plan = std::move(plans.at(0));
+      };
+      bindIfUnbound(left);
+      bindIfUnbound(right);
+    }
+  }
 
   // create a new subtree plan
   SubtreePlan candidate =

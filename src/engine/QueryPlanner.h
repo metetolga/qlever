@@ -784,11 +784,17 @@ class QueryPlanner {
         SubtreePlanVec&& candidates,
         bool isGraphVariableInScopeOnBothSidesOfMinus = false);
 
-    // Helper function for `graphPatternOperationVisitor`. For a
-    // `GRAPH ?graphVar {...}` clause, make sure that `graphVar` is bound in
-    // every candidate: if a candidate does not already contain a column for
-    // `graphVar`, cross-join it with all graphs that could possibly match (see
-    // `DistinctGraphs::makeAllGraphs`).
+    // Inside a `GRAPH ?graphVar {...}` clause, make sure that `graphVar` is
+    // bound to exactly the graphs that the clause ranges over (see
+    // `DistinctGraphs::makeAllGraphs`), in every candidate:
+    // - If a candidate does not contain a column for `graphVar`, cross-join it
+    //   with all graphs, e.g. `GRAPH ?g { VALUES ?x { 1 } }`.
+    // - If it contains a column that might hold UNDEF or values that are not
+    //   graphs (see `Operation::columnContainsOnlyActiveGraphs`), join it with
+    //   all graphs, e.g. `GRAPH ?g { VALUES ?g { UNDEF } }`.
+    // - Otherwise, e.g. for `GRAPH ?g { ?s ?p ?o }`, keep it as it is.
+    // This is called at the end of a `GRAPH ?var` clause, and also before an
+    // OPTIONAL or MINUS join and on the sides of a UNION inside the clause.
     void bindGraphVariableIfUnbound(const Variable& graphVar,
                                     SubtreePlanVec& candidates);
 
