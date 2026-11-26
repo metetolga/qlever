@@ -500,26 +500,26 @@ TEST(Minus, columnContainsOnlyActiveGraphs) {
       std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?g"}});
   auto index = ad_utility::makeExecutionTree<IndexScan>(
       qec, Permutation::POS,
-      SparqlTripleSimple{Variable{"?a"}, Iri::fromIriref("<b>"),
-                         Iri::fromIriref("<c>"), 
-      {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}
-    });
+      SparqlTripleSimple{
+          Variable{"?a"},
+          Iri::fromIriref("<b>"),
+          Iri::fromIriref("<c>"),
+          {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}});
 
-  // Only the left side counts, and it is a VALUES clause, so there is no guarantee.
+  // Only the left side counts, and it is a VALUES clause, so there is no
+  // guarantee.
   Minus minus1{qec, values, index};
   EXPECT_FALSE(minus1.columnContainsOnlyActiveGraphs(Variable{"?a"}));
   EXPECT_FALSE(minus1.columnContainsOnlyActiveGraphs(Variable{"?g"}));
-  EXPECT_THROW(
-      minus1.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
-      ad_utility::Exception);
+  EXPECT_THROW(minus1.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+               ad_utility::Exception);
 
   // Only the left side counts, and its graph column ?g only contains graphs.
   Minus minus2{qec, index, values};
   EXPECT_FALSE(minus2.columnContainsOnlyActiveGraphs(Variable{"?a"}));
   EXPECT_TRUE(minus2.columnContainsOnlyActiveGraphs(Variable{"?g"}));
-  EXPECT_THROW(
-      minus2.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
-      ad_utility::Exception);
+  EXPECT_THROW(minus2.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+               ad_utility::Exception);
 }
 
 // _____________________________________________________________________________

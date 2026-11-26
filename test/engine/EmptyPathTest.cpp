@@ -421,6 +421,25 @@ TEST(EmptyPath, columnOriginatesFromGraphOrUndef) {
 }
 
 // _____________________________________________________________________________
+TEST(EmptyPath, columnContainsOnlyActiveGraphs) {
+  auto* qec = makeQec(kg);
+  auto getId = ad_utility::testing::makeGetId(qec->getIndex());
+  auto emptyPath =
+      makeExistenceCheck(qec, Variable{"?g"},
+                         makeIdTableFromVector({{getId("<a>"), getId("<b>")}}),
+                         {
+                             Variable{"?x"},
+                             Variable{"?y"},
+                         });
+
+  EXPECT_FALSE(emptyPath.columnContainsOnlyActiveGraphs(Variable{"?x"}));
+  EXPECT_FALSE(emptyPath.columnContainsOnlyActiveGraphs(Variable{"?y"}));
+  EXPECT_TRUE(emptyPath.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_THROW(emptyPath.columnContainsOnlyActiveGraphs(Variable{"?notThere"}),
+               ad_utility::Exception);
+}
+
+// _____________________________________________________________________________
 TEST(EmptyPath, theResultCanBeFullyMaterialized) {
   auto* qec = makeQec(kg);
   auto getId = ad_utility::testing::makeGetId(qec->getIndex());
