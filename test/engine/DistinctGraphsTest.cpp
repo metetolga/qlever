@@ -195,6 +195,21 @@ TEST(DistinctGraphs, computeResultIncludesDefaultGraphIfRequested) {
 }
 
 // _____________________________________________________________________________
+TEST(DistinctGraphs, columnContainsOnlyActiveGraphs) {
+  auto dg1 = makeDistinctGraphs({}, false);
+
+  // The result consists of exactly the graphs of the index, so the column is
+  // always guaranteed.
+  EXPECT_TRUE(dg1.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_THROW(dg1.columnContainsOnlyActiveGraphs(Variable{"?notValid"}),
+               ad_utility::Exception);
+
+  auto dg2 = makeDistinctGraphs({}, true);
+  // The column is still guaranteed even if the default graph is included.
+  EXPECT_TRUE(dg2.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+}
+
+// _____________________________________________________________________________
 TEST(DistinctGraphs, makeAllGraphsUsesDistinctGraphsIfGraphsAreUnrestricted) {
   auto* qec = ad_utility::testing::getQec();
   auto tree = DistinctGraphs::makeAllGraphs(qec, Variable{"?g"}, Graphs::All());
