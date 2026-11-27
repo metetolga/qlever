@@ -24,6 +24,7 @@
 #include "engine/MaterializedViews.h"
 #include "engine/NamedResultCache.h"
 #include "engine/sparqlExpressions/LiteralExpression.h"
+#include "global/Constants.h"
 #include "index/IndexImpl.h"
 #include "index/TripleComponentConversions.h"
 #include "parser/ParsedQuery.h"
@@ -1809,6 +1810,34 @@ TEST(IndexScan, columnOriginatesFromGraphOrUndef) {
   EXPECT_FALSE(scan3.columnOriginatesFromGraphOrUndef(Var{"?y"}));
   EXPECT_THROW(scan3.columnOriginatesFromGraphOrUndef(Var{"?z"}),
                ad_utility::Exception);
+}
+
+// _____________________________________________________________________________
+TEST(IndexScan, columnContainsOnlyActiveGraphs) {
+  auto* qec = getQec();
+  IndexScan scan1{
+      qec, Permutation::PSO,
+      SparqlTripleSimple{Var{"?x"},
+                         Var{"?y"},
+                         Var{"?z"},
+                         {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Var{"?g"}}}}};
+  // Only the graph column gives active graphs.
+  EXPECT_FALSE(scan1.columnContainsOnlyActiveGraphs(Var{"?x"}));
+  EXPECT_FALSE(scan1.columnContainsOnlyActiveGraphs(Var{"?y"}));
+  EXPECT_FALSE(scan1.columnContainsOnlyActiveGraphs(Var{"?z"}));
+  EXPECT_TRUE(scan1.columnContainsOnlyActiveGraphs(Var{"?g"}));
+  EXPECT_THROW(scan1.columnContainsOnlyActiveGraphs(Var{"?notExisting"}),
+               ad_utility::Exception);
+
+  // An additional column that is not the graph column is not guaranteed.
+  IndexScan scan2{
+      qec, Permutation::PSO,
+      SparqlTripleSimple{Var{"?x"},
+                         Var{"?y"},
+                         Var{"?z"},
+                         {std::pair{ADDITIONAL_COLUMN_INDEX_SUBJECT_PATTERN,
+                                    Var{"?pattern"}}}}};
+  EXPECT_FALSE(scan2.columnContainsOnlyActiveGraphs(Var{"?pattern"}));
 }
 
 namespace {
