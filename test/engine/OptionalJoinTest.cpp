@@ -872,6 +872,49 @@ TEST(OptionalJoin, columnOriginatesFromGraphOrUndef) {
 }
 
 // _____________________________________________________________________________
+TEST(OptionalJoin, columnContainsOnlyActiveGraphs) {
+  using ad_utility::triple_component::Iri;
+  auto* qec = getQec();
+  auto values = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?g"}, Variable{"?c"}});
+  auto scan = ad_utility::makeExecutionTree<IndexScan>(
+      qec, Permutation::PSO,
+      SparqlTripleSimple{
+          Variable{"?x"},
+          Iri::fromIriref("<b>"),
+          Variable{"?y"},
+          {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}});
+
+  // Every row of the result stems from a row of the left side, so for the join
+  // column `?g` only the left side counts. Here the left side guarantees it.
+  OptionalJoin scanLeft{qec, scan, values};
+  EXPECT_TRUE(scanLeft.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_FALSE(scanLeft.columnContainsOnlyActiveGraphs(Variable{"?x"}));
+  EXPECT_FALSE(scanLeft.columnContainsOnlyActiveGraphs(Variable{"?y"}));
+  // `?c` only occurs on the right side, so it is UNDEF for the rows without a
+  // match.
+  EXPECT_FALSE(scanLeft.columnContainsOnlyActiveGraphs(Variable{"?c"}));
+  EXPECT_THROW(
+      scanLeft.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+      ad_utility::Exception);
+
+  // Unlike for a `Join`, a guaranteed right side doesn't help: the rows of the
+  // left side without a match are kept, together with their (arbitrary) `?g`.
+  OptionalJoin valuesLeft{qec, values, scan};
+  EXPECT_FALSE(valuesLeft.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_FALSE(valuesLeft.columnContainsOnlyActiveGraphs(Variable{"?c"}));
+
+  // A column that only occurs on the right side is UNDEF for the rows without a
+  // match, even if the right side guarantees it. Here the join column is `?x`.
+  auto valuesX = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0}}),
+      std::vector<std::optional<Variable>>{Variable{"?x"}});
+  OptionalJoin graphOnlyRight{qec, valuesX, scan};
+  EXPECT_FALSE(graphOnlyRight.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+}
+
+// _____________________________________________________________________________
 TEST(OptionalJoin, limitOffsetIsPropagated) {
   auto qec = ad_utility::testing::getQec();
   auto inputTable = makeIdTableFromVector({{1}, {2}, {3}});
