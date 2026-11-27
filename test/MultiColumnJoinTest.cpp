@@ -294,3 +294,44 @@ TEST(MultiColumnJoin, columnOriginatesFromGraphOrUndef) {
   testWithTrees(values2, values3, false, false, false);
   testWithTrees(values2, values1, false, false, false);
 }
+
+// _____________________________________________________________________________
+TEST(MultiColumnJoin, columnContainsOnlyActiveGraphs) {
+  using ad_utility::triple_component::Iri;
+  auto* qec = ad_utility::testing::getQec();
+  auto values = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?g"}});
+  auto scan = ad_utility::makeExecutionTree<IndexScan>(
+      qec, Permutation::PSO,
+      SparqlTripleSimple{
+          Variable{"?a"},
+          Iri::fromIriref("<b>"),
+          Variable{"?c"},
+          {std::pair{ADDITIONAL_COLUMN_GRAPH_ID, Variable{"?g"}}}});
+
+  // `?g` is a join column and the scan guarantees it, so only real graphs
+  // survive the join. `?a` is a join column too, but neither side guarantees
+  // it, and `?c` (only in the scan) is an object column.
+  MultiColumnJoin mcj1{qec, scan, values};
+  EXPECT_FALSE(mcj1.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+  EXPECT_FALSE(mcj1.columnContainsOnlyActiveGraphs(Variable{"?c"}));
+  EXPECT_TRUE(mcj1.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_THROW(mcj1.columnContainsOnlyActiveGraphs(Variable{"?notExisting"}),
+               ad_utility::Exception);
+
+  // The join is symmetric: a guaranteed graph column on the right side is
+  // enough as well (unlike for `OptionalJoin`).
+  MultiColumnJoin mcj2{qec, values, scan};
+  EXPECT_TRUE(mcj2.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+  EXPECT_FALSE(mcj2.columnContainsOnlyActiveGraphs(Variable{"?a"}));
+
+  // `?g` only occurs in the scan; the inner join keeps it defined, so the
+  // default rule applies.
+  auto valuesAC = ad_utility::makeExecutionTree<ValuesForTesting>(
+      qec, makeIdTableFromVector({{0, 1}}),
+      std::vector<std::optional<Variable>>{Variable{"?a"}, Variable{"?c"}});
+  MultiColumnJoin mcj3{qec, valuesAC, scan};
+  EXPECT_TRUE(mcj3.columnContainsOnlyActiveGraphs(Variable{"?g"}));
+}
+
